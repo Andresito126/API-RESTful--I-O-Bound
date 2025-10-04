@@ -1,7 +1,10 @@
-const cluster = require("cluster");
-const numCPUs = require("os").availableParallelism();
-const process = require("process");
-const http = require("http");
+import cluster from "cluster";
+import process from "process";
+import http from "http";
+import os from "os";
+import { imagesRoutes } from "./routes/ImagesRoutes.js";
+
+const numCPUs = os.availableParallelism();
 
 const PORT = 3000;
 
@@ -21,16 +24,23 @@ if (cluster.isPrimary) {
     cluster.on('exit', (worker, code, signal) => { console.log(`worker ${worker.process.pid} died`) });
 
 } else {
-
-    // Los procesos trabajadores entrarán en este bloque
+    // Los workers entrarán en este bloque
     // Crear un servidor HTTP básico
     http.createServer((req, res) => {
-        res.writeHead(200);
-        res.end('Hello World\n');
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+        if (req.method === "OPTIONS") {
+            res.writeHead(204);
+            res.end();
+            return;
+        }
+
+        imagesRoutes(req, res);
     }).listen(PORT);
 
     console.log(`Worker ${process.pid} started`);
-
 }
 
 
