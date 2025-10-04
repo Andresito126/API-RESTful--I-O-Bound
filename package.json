@@ -17,5 +17,8 @@
   "bugs": {
     "url": "https://github.com/KevinJr27/API-RESTful--I-O-Bound/issues"
   },
-  "homepage": "https://github.com/KevinJr27/API-RESTful--I-O-Bound#readme"
+  "homepage": "https://github.com/KevinJr27/API-RESTful--I-O-Bound#readme",
+  "dependencies": {
+    "sharp": "^0.34.4"
+  }
 }
