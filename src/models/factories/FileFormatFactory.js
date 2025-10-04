@@ -1,14 +1,16 @@
-import { FileFormatStrategy } from "../interfaces/FileFormatStrategy";
+import { PDFFileFormatStrategy } from "../strategies/PDFFileFormatStrategy.js";
 
 export class FileFormatFactory {
     // Método estático para crear estrategias de distintos formatos de archivos
     static createFileFormatStrategy(format, files){
         switch(format.toLowerCase()){
-            case 'PDF':
-                return new FileFormatStrategy(files);
-
+            case 'pdf':
+                return new PDFFileFormatStrategy(files);
+                
             default: 
                 throw new Error(`Archive format ${format} no support`);
         }
     }
 }
+
+

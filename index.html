@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Subir imágenes y descargar PDF</title>
+</head>
+
+<body>
+  <h1>Convertir imágenes a PDF</h1>
+
+  <form id="uploadForm">
+    <input type="file" id="images" name="images[]" accept="image/*" multiple required />
+    <button type="submit">Convertir a PDF</button>
+  </form>
+
+  <script>
+    const form = document.getElementById("uploadForm");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const input = document.getElementById("images");
+      const files = input.files;
+
+      if (!files.length) {
+        alert("Selecciona al menos una imagen");
+        return;
+      }
+
+      const formData = new FormData();
+      for (const file of files) {
+        formData.append("images[]", file);
+      }
+
+      try {
+        const response = await fetch("http://localhost:3000/images/upload", {
+          method: "POST",
+          body: formData
+        });
+
+        if (!response.ok) throw new Error("Error en la conversión");
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+
+        a.href = url;
+        a.download = "converted.pdf";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    });
+  </script>
+</body>
+
+</html>
