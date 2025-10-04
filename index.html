@@ -2,60 +2,121 @@
 <html lang="es">
 
 <head>
-  <meta charset="UTF-8">
-  <title>Subir imágenes y descargar PDF</title>
+    <meta charset="UTF-8">
+    <title>Convertir imágenes a PDF</title>
+    <style>
+        body { font-family: sans-serif; }
+        .container { display: flex; gap: 40px; }
+        .box { border: 1px solid #ccc; padding: 20px; border-radius: 8px; flex: 1; }
+        textarea { width: 100%; height: 150px; resize: vertical; margin-bottom: 10px; }
+    </style>
 </head>
 
 <body>
-  <h1>Convertir imágenes a PDF</h1>
+    <h1>Convertir imágenes a PDF</h1>
 
-  <form id="uploadForm">
-    <input type="file" id="images" name="images[]" accept="image/*" multiple required />
-    <button type="submit">Convertir a PDF</button>
-  </form>
+    <div class="container">
+        
+        <div class="box">
+            <h2>1. Desde Archivos Locales 💻</h2>
+            <form id="uploadFormLocal">
+                <input type="file" id="imagesLocal" name="images[]" accept="image/*" multiple required />
+                <button type="submit">Convertir a PDF</button>
+            </form>
+        </div>
 
-  <script>
-    const form = document.getElementById("uploadForm");
+        <div class="box">
+            <h2>2. Desde URLs Externas 🌐</h2>
+            <form id="uploadFormUrl">
+                <label for="urlsInput">URLs (una por línea):</label>
+                <textarea id="urlsInput" placeholder="https://ejemplo.com/img1.jpg
+https://servidor.net/img2.png"></textarea>
+                <button type="submit">Descargar y Convertir a PDF</button>
+            </form>
+        </div>
+    </div>
 
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
+    <script>
+        // --- Función genérica de descarga de PDF ---
+        async function downloadPDF(response) {
+            if (!response.ok) {
+                // Si el backend envía JSON con el error (como configuramos)
+                const errorData = await response.json(); 
+                throw new Error(errorData.error || `Error HTTP: ${response.status}`);
+            }
 
-      const input = document.getElementById("images");
-      const files = input.files;
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
 
-      if (!files.length) {
-        alert("Selecciona al menos una imagen");
-        return;
-      }
+            a.href = url;
+            // El nombre del archivo lo toma del header Content-Disposition si es posible,
+            // si no, usa 'converted.pdf'.
+            a.download = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || "converted.pdf"; 
+            
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        }
 
-      const formData = new FormData();
-      for (const file of files) {
-        formData.append("images[]", file);
-      }
+        // --- MANEJADOR 1: SUBIDA LOCAL (Refactorizado con la nueva ruta) ---
+        const formLocal = document.getElementById("uploadFormLocal");
+        formLocal.addEventListener("submit", async (e) => {
+            e.preventDefault();
 
-      try {
-        const response = await fetch("http://localhost:3000/images/upload", {
-          method: "POST",
-          body: formData
+            const files = document.getElementById("imagesLocal").files;
+            if (!files.length) {
+                alert("Selecciona al menos una imagen");
+                return;
+            }
+
+            const formData = new FormData();
+            for (const file of files) {
+                formData.append("images[]", file);
+            }
+
+            try {
+                const response = await fetch("http://localhost:3000/images/upload/local", { // 👈 RUTA CORREGIDA
+                    method: "POST",
+                    body: formData
+                });
+                await downloadPDF(response);
+
+            } catch (err) {
+                alert("Error de Subida Local: " + err.message);
+            }
         });
 
-        if (!response.ok) throw new Error("Error en la conversión");
+        // --- MANEJADOR 2: SUBIDA POR URLS ---
+        const formUrl = document.getElementById("uploadFormUrl");
+        formUrl.addEventListener("submit", async (e) => {
+            e.preventDefault();
 
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
+            const urlsInput = document.getElementById("urlsInput").value.trim();
+            const urlsArray = urlsInput.split('\n').map(url => url.trim()).filter(url => url.length > 0);
 
-        a.href = url;
-        a.download = "converted.pdf";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-      } catch (err) {
-        alert("Error: " + err.message);
-      }
-    });
-  </script>
+            if (urlsArray.length === 0) {
+                alert("Ingresa al menos una URL.");
+                return;
+            }
+
+            try {
+                const response = await fetch("http://localhost:3000/images/upload/url", { // 👈 RUTA CORRECTA
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json" // 👈 ¡CLAVE! Enviamos JSON
+                    },
+                    body: JSON.stringify({ urls: urlsArray })
+                });
+
+                await downloadPDF(response);
+
+            } catch (err) {
+                alert("Error de Descarga por URL: " + err.message);
+            }
+        });
+    </script>
 </body>
 
 </html>
