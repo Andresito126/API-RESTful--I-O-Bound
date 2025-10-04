@@ -1,31 +1,37 @@
 import cluster from "cluster";
-import process from "process";
-import http from "http";
 import os from "os";
-import { imagesRoutes } from "./routes/ImagesRoutes.js";
+import http from "http";
+import { conversionsRoutes } from "./routes/ConversionsRoutes.js";
+import { jobManager } from "./models/entities/job/JobManager.js";
 
 const numCPUs = os.availableParallelism();
-
 const PORT = 3000;
 
 if (cluster.isPrimary) {
+    console.log(`Master ${process.pid} is running`);
 
-    console.log(`Primary ${process.pid} is running`);
-
-    // El proceso primario crea un worker por cada núcleo de CPU disponible en el sistema. 
+    // Fork workers
     for (let i = 0; i < numCPUs; i++) {
-        cluster.fork();
+        const worker = cluster.fork();
+        // Marcar como disponible
+        worker.isAvailable = true;
     }
 
-    // Se encarga de manejar la salida de los procesos workers. 
-    // Cada ves que un proceso termina, se registra en la consola 
-    // el ID del proceso worker y se crea un nuevo proceso trabajador 
-    // para remplazarlo
-    cluster.on('exit', (worker, code, signal) => { console.log(`worker ${worker.process.pid} died`) });
+    // Escuchar mensajes de workers
+    cluster.on("message", (worker, message) => {
+        if (message.type === "newJob") {
+            // El master centraliza la cola de jobs
+            jobManager.enqueueJob(message.job, false);
+        }
+    });
+
+    cluster.on('exit', (worker) => {
+        console.log(`Worker ${worker.process.pid} died`);
+        cluster.fork();
+    });
 
 } else {
-    // Los workers entrarán en este bloque
-    // Crear un servidor HTTP básico
+    // Workers HTTP server
     http.createServer((req, res) => {
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -37,10 +43,8 @@ if (cluster.isPrimary) {
             return;
         }
 
-        imagesRoutes(req, res);
+        conversionsRoutes(req, res);
     }).listen(PORT);
 
     console.log(`Worker ${process.pid} started`);
 }
-
-

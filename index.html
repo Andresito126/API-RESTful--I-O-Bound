@@ -14,8 +14,13 @@
     <button type="submit">Convertir a PDF</button>
   </form>
 
+  <div id="status"></div>
+  <div id="download"></div>
+
   <script>
     const form = document.getElementById("uploadForm");
+    const statusDiv = document.getElementById("status");
+    const downloadDiv = document.getElementById("download");
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -34,23 +39,38 @@
       }
 
       try {
-        const response = await fetch("http://localhost:3000/images/upload", {
+        // 1️⃣ Crear el job
+        const response = await fetch("http://localhost:3000/conversions", {
           method: "POST",
           body: formData
         });
 
-        if (!response.ok) throw new Error("Error en la conversión");
+        if (!response.ok) throw new Error("Error creando la conversión");
 
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
+        const data = await response.json();
+        const jobId = data.jobId;
+        statusDiv.textContent = `Job creado: ${jobId}. Procesando...`;
 
-        a.href = url;
-        a.download = "converted.pdf";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
+        // 2️⃣ Polling para verificar estado
+        const interval = setInterval(async () => {
+          const statusResp = await fetch(`http://localhost:3000/conversions/${jobId}`);
+          const job = await statusResp.json();
+
+          statusDiv.textContent = `Estado: ${job.status}`;
+
+          if (job.status === "done") {
+            clearInterval(interval);
+
+            // 3️⃣   Crear link de descarga
+            const downloadLink = document.createElement("a");
+            downloadLink.href = `http://localhost:3000/conversions/${jobId}/download`;
+            downloadLink.textContent = "Descargar PDF";
+            downloadDiv.appendChild(downloadLink);
+          } else if (job.status === "error") {
+            clearInterval(interval);
+            statusDiv.textContent = `Error: ${job.errorMessage}`;
+          }
+        }, 2000); // cada 2 segundos
       } catch (err) {
         alert("Error: " + err.message);
       }
