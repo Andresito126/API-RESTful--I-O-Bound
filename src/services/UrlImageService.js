@@ -17,10 +17,10 @@ export class UrlImageService {
   }
 
 
-  static async downloadImage(url, folder = "./src/temp") {
+  static async downloadImage(url, uploadsDir) {
     
     // siempre se guardara en formato JPG
-    const filename = path.join(folder, Date.now() + ".jpg");
+    const filename = path.join(uploadsDir, `${Date.now()}-${Math.floor(Math.random()*1000)}.jpg`);
     const client = url.startsWith("https") ? https : http;
 
     return new Promise((resolve, reject) => {  
@@ -46,7 +46,11 @@ export class UrlImageService {
           // se procesa primero y luego se convierte a jpg antes de guardar
           // y devuelve el nombre del archivo
           await sharp(buffer).jpeg().toFile(filename);
-          resolve(filename);
+          resolve({
+              path: filename,
+              mimetype: "image/jpeg",
+              originalname: path.basename(filename)
+            });
         } catch (err) {
           reject(err);
         }
@@ -56,15 +60,15 @@ export class UrlImageService {
 
   }
 
-  static async createFolderAndImages(urls, folder = "./src/temp") {
+  static async createFolderAndImages(urls, uploadsDir) {
   // si existe la carpeta, se borra y se crea de nuevo
-  if (fs.existsSync(folder)) {
-    fs.rmSync(folder, { recursive: true, force: true });
-    console.log(`carpeta '${folder}' eliminada.`);
+  if (fs.existsSync(uploadsDir)) {
+    fs.rmSync(uploadsDir, { recursive: true, force: true });
+    console.log(`Carpeta '${uploadsDir}' eliminada.`);
   }
 
-  fs.mkdirSync(folder, { recursive: true });
-  console.log(`Carpeta '${folder}' creada.`);
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log(`Carpeta '${uploadsDir}' creada.`);
 
   const results = [];
   for (let url of urls) {
@@ -77,7 +81,7 @@ export class UrlImageService {
     try {
 
       // descarga y convierte cada imagen
-      const file = await this.downloadImage(url, folder);
+      const file = await this.downloadImage(url, uploadsDir);
       results.push(file);
     } catch (err) {
       console.error("Error descargando", url, err);
