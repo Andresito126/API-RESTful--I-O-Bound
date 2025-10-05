@@ -1,22 +1,32 @@
+import { parentPort, workerData } from "worker_threads";
 import { FileFormatFactory } from "../models/factories/FileFormatFactory.js";
 import { ImageProcessor } from "../models/entities/ImageProcessor.js";
+import { jobManagerDB } from "../models/entities/job/JobManager.js";
 
-process.on("message", async (msg) => {
-    if (msg.type === "runJob") {
-        const { job } = msg;
+(async () => {
+    const { job } = workerData;
 
-        try {
-            const processor = new ImageProcessor();
-            processor.addImages(job.files);
+    console.log("Esto es lo que llega: ", workerData)
 
-            const strategy = FileFormatFactory.createFileFormatStrategy(job.format);
-            processor.setFileFormatStrategy(strategy);
+    try {
+        await jobManagerDB.updateJob(job.id, { status: "processing" });
 
-            const outputPath = await processor.process();
+        const processor = new ImageProcessor();
 
-            process.send({ type: "jobDone", jobId: job.id, success: true, outputPath });
-        } catch (err) {
-            process.send({ type: "jobDone", jobId: job.id, success: false, error: err.message });
-        }
+        const files = typeof job.files === 'string' ? JSON.parse(job.files) : job.files;
+        processor.addImages(files);
+
+        const strategy = FileFormatFactory.createFileFormatStrategy("pdf");
+        processor.setFileFormatStrategy(strategy);
+
+        const outputPath = await processor.process();
+        console.log(outputPath)
+
+        await jobManagerDB.updateJob(job.id, { status: "done", result_path: outputPath });
+
+        parentPort.postMessage({ success: true, jobId: job.id, outputPath });
+    } catch (err) {
+        await jobManagerDB.updateJob(job.id, { status: "error", error: err.message });
+        parentPort.postMessage({ success: false, jobId: job.id, error: err.message });
     }
-});
+})();

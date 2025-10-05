@@ -2,12 +2,11 @@ import busboy from "busboy";
 import path from "path";
 import fs from "fs";
 import url from "url";
-import { jobManager } from "../models/entities/job/JobManager.js"
+import { jobManagerDB } from "../models/entities/job/JobManager.js";
 import { cleanupJob } from "../utils/cleanupJob.js";
+import { Worker } from "worker_threads";
 
-export const createConversionController = (req, res) => {
-    console.log("Headers:", req.headers["content-type"]);
-
+export const createConversionController = async (req, res) => {
     const __filename = url.fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
     const uploadsDir = path.resolve(__dirname, "../uploads");
@@ -27,67 +26,95 @@ export const createConversionController = (req, res) => {
         });
     });
 
-    busBoy.on("finish", () => {
-        const job = jobManager.createJob(uploadedFiles, "pdf");
+    busBoy.on("finish", async () => {
+        try {
+            const job = await jobManagerDB.createJob(uploadedFiles);
+            const worker = new Worker('./src/workers/PDFWorker.js', {
+                workerData: { job }
+            });
 
-        jobManager.enqueueJob(job);
+            worker.on('message', msg => console.log('Worker finished job', msg));
+            worker.on('error', err => console.error('Worker error:', err));
 
-        res.writeHead(202, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({
-            jobId: job.id,
-            status: job.status,
-            message: "Job queued for processing"
-        }));
+            res.writeHead(202, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({
+                jobId: job.id,
+                status: job.status,
+                message: "Job queued for processing"
+            }));
+        } catch (err) {
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: err.message }));
+        }
     });
 
     req.pipe(busBoy);
 };
 
-export const getConversionStatusController = (req, res, jobId) => {
-    const job = jobManager.getJob(jobId);
-    if (!job) {
-        res.writeHead(404, { "Content-Type": "application/json" });
-        return res.end(JSON.stringify({ error: "Conversion not found" }));
-    }
+export const getConversionStatusController = async (req, res, jobId) => {
+    try {
+        const job = await jobManagerDB.getJob(jobId);
 
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(job));
+        if (!job) {
+            res.writeHead(404, { "Content-Type": "application/json" });
+            return res.end(JSON.stringify({ error: "Conversion not found" }));
+        }
+
+        const safeJob = {
+            id: job.id,
+            status: job.status,
+            files: job.files.map(f => ({
+                path: f.path,
+                mimetype: f.mimetype,
+                originalname: f.originalname
+            })),
+            result_path: job.result_path,
+            error: job.error,
+            created_at: job.created_at,
+            updated_at: job.updated_at
+        };
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(safeJob));
+
+    } catch (err) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: err.message }));
+    }
 };
 
-export const downloadConversionController = (req, res, jobId) => {
-    const job = jobManager.getJob(jobId);
-    if (!job || job.status !== "done" || !job.resultPath) {
-        res.writeHead(404, { "Content-Type": "application/json" });
-        return res.end(JSON.stringify({ error: "PDF not ready" }));
+
+export const downloadConversionController = async (req, res, jobId) => {
+    try {
+        const job = await jobManagerDB.getJob(jobId);
+
+        if (!job || job.status !== "done" || !job.result_path) {
+            res.writeHead(404, { "Content-Type": "application/json" });
+            return res.end(JSON.stringify({ error: "PDF not ready" }));
+        }
+
+        res.writeHead(200, {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `attachment; filename="conversion-${jobId}.pdf"`,
+        });
+
+        const stream = fs.createReadStream(job.result_path);
+        stream.pipe(res);
+
+        res.on("finish", () => cleanupJob(job, jobId));
+
+        stream.on("error", (err) => {
+            console.error(`Stream error for job ${jobId}:`, err);
+            res.writeHead(500).end("Error streaming file");
+            cleanupJob(job, jobId);
+        });
+
+        res.on("error", (err) => {
+            console.error(`Response error for job ${jobId}:`, err);
+            cleanupJob(job, jobId);
+        });
+    } catch (err) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: err.message }));
     }
-
-    res.writeHead(200, {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="conversion-${jobId}.pdf"`,
-    });
-
-    const stream = fs.createReadStream(job.resultPath);
-    stream.pipe(res);
-
-    res.on("finish", () => {
-        cleanupJob(jobManager, job, jobId);
-    });
-
-    stream.on("error", (err) => {
-        console.error(`Stream error for job ${jobId}:`, err);
-        res.writeHead(500).end("Error streaming file");
-        cleanupJob(jobManager, job, jobId);
-    });
-
-    res.on("error", (err) => {
-        console.error(`Response error for job ${jobId}:`, err);
-        cleanupJob(jobManager, job, jobId);
-    });
-};
-
-export const getQueueStatusController = (req, res) => {
-    const status = jobManager.getQueueStatus();
-
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(status));
 };

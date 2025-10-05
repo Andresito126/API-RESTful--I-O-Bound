@@ -21,8 +21,11 @@
   "homepage": "https://github.com/KevinJr27/API-RESTful--I-O-Bound#readme",
   "dependencies": {
     "busboy": "^1.6.0",
+    "dotenv": "^17.2.3",
     "multer": "^2.0.2",
+    "mysql2": "^3.15.1",
     "nodemon": "^3.1.10",
-    "pdfkit": "^0.17.2"
+    "pdfkit": "^0.17.2",
+    "uuid": "^13.0.0"
   }
 }

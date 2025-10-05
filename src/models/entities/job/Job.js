@@ -1,4 +1,4 @@
-// epresenta un trabajo de conversión de imágenes a PDF.
+// Entidad que representa un trabajo de conversión de imágenes a PDF.
 export class Job {
     constructor(id, files, format) {
         this.id = id;

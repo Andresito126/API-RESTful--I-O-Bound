@@ -1,24 +1,26 @@
 import fs from "fs";
+import { jobManagerDB } from "../models/entities/job/JobManager.js";
 
-export function cleanupJob(jobManager, job, jobId) {
-    setImmediate(() => {
-        if (fs.existsSync(job.resultPath)) {
-            fs.unlink(job.resultPath, (err) => {
-                if (err) console.error(`Error deleting PDF: ${err.message}`);
-                else console.log(`PDF deleted: ${job.resultPath}`);
+export async function cleanupJob(job, jobId) {
+    setImmediate(async () => {
+        // Eliminar el PDF generado
+        if (job.result_path && fs.existsSync(job.result_path)) {
+            fs.unlink(job.result_path, (err) => err ? console.error(err) : console.log(`PDF deleted: ${job.result_path}`));
+        }
+
+        // Eliminar las imágenes
+        if (job.files && Array.isArray(job.files)) {
+            job.files.forEach(file => {
+                if (fs.existsSync(file.path)) {
+                    fs.unlink(file.path, err =>
+                        err ? console.error(err) : console.log(`Image deleted: ${file.path}`)
+                    );
+                }
             });
         }
 
-        job.files.forEach(file => {
-            if (fs.existsSync(file.path)) {
-                fs.unlink(file.path, (err) => {
-                    if (err) console.error(`Error deleting image ${file.path}: ${err.message}`);
-                    else console.log(`Image deleted: ${file.path}`);
-                });
-            }
-        });
-
-        jobManager.jobs.delete(jobId);
+        // Marcar job como eliminado
+        await jobManagerDB.updateJob(jobId, { status: "deleted" });
         console.log(`Job ${jobId} cleaned up`);
     });
 }
