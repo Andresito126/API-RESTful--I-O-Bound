@@ -2,121 +2,80 @@
 <html lang="es">
 
 <head>
-    <meta charset="UTF-8">
-    <title>Convertir imágenes a PDF</title>
-    <style>
-        body { font-family: sans-serif; }
-        .container { display: flex; gap: 40px; }
-        .box { border: 1px solid #ccc; padding: 20px; border-radius: 8px; flex: 1; }
-        textarea { width: 100%; height: 150px; resize: vertical; margin-bottom: 10px; }
-    </style>
+  <meta charset="UTF-8">
+  <title>Subir imágenes y descargar PDF</title>
 </head>
 
 <body>
-    <h1>Convertir imágenes a PDF</h1>
+  <h1>Convertir imágenes a PDF</h1>
 
-    <div class="container">
-        
-        <div class="box">
-            <h2>1. Desde Archivos Locales 💻</h2>
-            <form id="uploadFormLocal">
-                <input type="file" id="imagesLocal" name="images[]" accept="image/*" multiple required />
-                <button type="submit">Convertir a PDF</button>
-            </form>
-        </div>
+  <form id="uploadForm">
+    <input type="file" id="images" name="images[]" accept="image/*" multiple required />
+    <button type="submit">Convertir a PDF</button>
+  </form>
 
-        <div class="box">
-            <h2>2. Desde URLs Externas 🌐</h2>
-            <form id="uploadFormUrl">
-                <label for="urlsInput">URLs (una por línea):</label>
-                <textarea id="urlsInput" placeholder="https://ejemplo.com/img1.jpg
-https://servidor.net/img2.png"></textarea>
-                <button type="submit">Descargar y Convertir a PDF</button>
-            </form>
-        </div>
-    </div>
+  <div id="status"></div>
+  <div id="download"></div>
 
-    <script>
-        // --- Función genérica de descarga de PDF ---
-        async function downloadPDF(response) {
-            if (!response.ok) {
-                // Si el backend envía JSON con el error (como configuramos)
-                const errorData = await response.json(); 
-                throw new Error(errorData.error || `Error HTTP: ${response.status}`);
-            }
+  <script>
+    const form = document.getElementById("uploadForm");
+    const statusDiv = document.getElementById("status");
+    const downloadDiv = document.getElementById("download");
 
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
 
-            a.href = url;
-            // El nombre del archivo lo toma del header Content-Disposition si es posible,
-            // si no, usa 'converted.pdf'.
-            a.download = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || "converted.pdf"; 
-            
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
-        }
+      const input = document.getElementById("images");
+      const files = input.files;
 
-        // --- MANEJADOR 1: SUBIDA LOCAL (Refactorizado con la nueva ruta) ---
-        const formLocal = document.getElementById("uploadFormLocal");
-        formLocal.addEventListener("submit", async (e) => {
-            e.preventDefault();
+      if (!files.length) {
+        alert("Selecciona al menos una imagen");
+        return;
+      }
 
-            const files = document.getElementById("imagesLocal").files;
-            if (!files.length) {
-                alert("Selecciona al menos una imagen");
-                return;
-            }
+      const formData = new FormData();
+      for (const file of files) {
+        formData.append("images[]", file);
+      }
 
-            const formData = new FormData();
-            for (const file of files) {
-                formData.append("images[]", file);
-            }
-
-            try {
-                const response = await fetch("http://localhost:3000/images/upload/local", { // 👈 RUTA CORREGIDA
-                    method: "POST",
-                    body: formData
-                });
-                await downloadPDF(response);
-
-            } catch (err) {
-                alert("Error de Subida Local: " + err.message);
-            }
+      try {
+        // 1️⃣ Crear el job
+        const response = await fetch("http://localhost:3000/conversions", {
+          method: "POST",
+          body: formData
         });
 
-        // --- MANEJADOR 2: SUBIDA POR URLS ---
-        const formUrl = document.getElementById("uploadFormUrl");
-        formUrl.addEventListener("submit", async (e) => {
-            e.preventDefault();
+        if (!response.ok) throw new Error("Error creando la conversión");
 
-            const urlsInput = document.getElementById("urlsInput").value.trim();
-            const urlsArray = urlsInput.split('\n').map(url => url.trim()).filter(url => url.length > 0);
+        const data = await response.json();
+        const jobId = data.jobId;
+        statusDiv.textContent = `Job creado: ${jobId}. Procesando...`;
 
-            if (urlsArray.length === 0) {
-                alert("Ingresa al menos una URL.");
-                return;
-            }
+        // 2️⃣ Polling para verificar estado
+        const interval = setInterval(async () => {
+          const statusResp = await fetch(`http://localhost:3000/conversions/${jobId}`);
+          const job = await statusResp.json();
 
-            try {
-                const response = await fetch("http://localhost:3000/images/upload/url", { // 👈 RUTA CORRECTA
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json" // 👈 ¡CLAVE! Enviamos JSON
-                    },
-                    body: JSON.stringify({ urls: urlsArray })
-                });
+          statusDiv.textContent = `Estado: ${job.status}`;
 
-                await downloadPDF(response);
+          if (job.status === "done") {
+            clearInterval(interval);
 
-            } catch (err) {
-                alert("Error de Descarga por URL: " + err.message);
-            }
-        });
-    </script>
+            // 3️⃣   Crear link de descarga
+            const downloadLink = document.createElement("a");
+            downloadLink.href = `http://localhost:3000/conversions/${jobId}/download`;
+            downloadLink.textContent = "Descargar PDF";
+            downloadDiv.appendChild(downloadLink);
+          } else if (job.status === "error") {
+            clearInterval(interval);
+            statusDiv.textContent = `Error: ${job.errorMessage}`;
+          }
+        }, 2000); // cada 2 segundos
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    });
+  </script>
 </body>
 
 </html>

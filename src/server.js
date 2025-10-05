@@ -2,10 +2,9 @@ import cluster from "cluster";
 import process from "process";
 import http from "http";
 import os from "os";
-import { imagesRoutes } from "./routes/ImagesRoutes.js";
+import { conversionsRoutes } from "./routes/ConversionsRoutes.js";
 
 const numCPUs = os.availableParallelism();
-
 const PORT = 3000;
 
 if (cluster.isPrimary) {
@@ -21,7 +20,11 @@ if (cluster.isPrimary) {
     // Cada ves que un proceso termina, se registra en la consola 
     // el ID del proceso worker y se crea un nuevo proceso trabajador 
     // para remplazarlo
-    cluster.on('exit', (worker, code, signal) => { console.log(`worker ${worker.process.pid} died`) });
+    cluster.on('exit', (worker, code, signal) => { 
+        console.log(`worker ${worker.process.pid} died`);
+        console.log('Starting a new worker...');
+        cluster.fork();
+    });
 
 } else {
     // Los workers entrarán en este bloque
@@ -37,7 +40,7 @@ if (cluster.isPrimary) {
             return;
         }
 
-        imagesRoutes(req, res);
+        conversionsRoutes(req, res);
     }).listen(PORT);
 
     console.log(`Worker ${process.pid} started`);
