@@ -1,4 +1,4 @@
-import { pool } from '../../../core/MySQL.js';
+import { mySQLDB as pool } from '../../../core/MySQL.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export class JobManagerDB {
@@ -36,4 +36,4 @@ export class JobManagerDB {
     }
 }
 
-export const jobManagerDB = JobManagerDB;
+export const jobManagerDB = new JobManagerDB();

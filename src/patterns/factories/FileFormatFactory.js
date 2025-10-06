@@ -1,4 +1,4 @@
-import { PDFFileFormatStrategy } from "../strategies/PDFFileFormatStrategy.js";
+import { PDFFileFormatStrategy } from "../models/strategies/PDFFileFormatStrategy.js";
 
 export class FileFormatFactory {
     // Método estático para crear estrategias de distintos formatos de archivos

@@ -7,7 +7,7 @@ export class ImageProcessor {
     addImages(images) {
         if (!Array.isArray(images) || images.length === 0){ 
             throw new Error("At least one image must be provided in order to convert it to PDF");
-        }
+        }   
         this.images = images;
     }
 

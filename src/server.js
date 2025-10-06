@@ -7,43 +7,59 @@ import { conversionsRoutes } from "./routes/ConversionsRoutes.js";
 const numCPUs = os.availableParallelism();
 const PORT = 3000;
 
-if (cluster.isPrimary) {
+// Los workers entrarán en este bloque
+// Crear un servidor HTTP básico
+http.createServer((req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-    console.log(`Primary ${process.pid} is running`);
-
-    // El proceso primario crea un worker por cada núcleo de CPU disponible en el sistema. 
-    for (let i = 0; i < numCPUs; i++) {
-        cluster.fork();
+    if (req.method === "OPTIONS") {
+        res.writeHead(204);
+        res.end();
+        return;
     }
 
-    // Se encarga de manejar la salida de los procesos workers. 
-    // Cada ves que un proceso termina, se registra en la consola 
-    // el ID del proceso worker y se crea un nuevo proceso trabajador 
-    // para remplazarlo
-    cluster.on('exit', (worker, code, signal) => { 
-        console.log(`worker ${worker.process.pid} died`);
-        console.log('Starting a new worker...');
-        cluster.fork();
-    });
+    conversionsRoutes(req, res);
+}).listen(PORT);
 
-} else {
-    // Los workers entrarán en este bloque
-    // Crear un servidor HTTP básico
-    http.createServer((req, res) => {
-        res.setHeader("Access-Control-Allow-Origin", "*");
-        res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+// if (cluster.isPrimary) {
 
-        if (req.method === "OPTIONS") {
-            res.writeHead(204);
-            res.end();
-            return;
-        }
+//     console.log(`Primary ${process.pid} is running`);
 
-        conversionsRoutes(req, res);
-    }).listen(PORT);
+//     // El proceso primario crea un worker por cada núcleo de CPU disponible en el sistema.
+//     for (let i = 0; i < numCPUs; i++) {
+//         cluster.fork();
+//     }
 
-    console.log(`Worker ${process.pid} started`);
-}
+//     // Se encarga de manejar la salida de los procesos workers.
+//     // Cada ves que un proceso termina, se registra en la consola
+//     // el ID del proceso worker y se crea un nuevo proceso trabajador
+//     // para remplazarlo
+//     cluster.on('exit', (worker, code, signal) => {
+//         console.log(`worker ${worker.process.pid} died`);
+//         console.log('Starting a new worker...');
+//         cluster.fork();
+//     });
+
+// } else {
+//     // Los workers entrarán en este bloque
+//     // Crear un servidor HTTP básico
+//     http.createServer((req, res) => {
+//         res.setHeader("Access-Control-Allow-Origin", "*");
+//         res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+//         res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+//         if (req.method === "OPTIONS") {
+//             res.writeHead(204);
+//             res.end();
+//             return;
+//         }
+
+//         conversionsRoutes(req, res);
+//     }).listen(PORT);
+
+//     console.log(`Worker ${process.pid} started`);
+// }
 
 

@@ -11,13 +11,13 @@ import { jobManagerDB } from "../models/entities/job/JobManager.js";
     try {
         await jobManagerDB.updateJob(job.id, { status: "processing" });
 
-        const processor = new ImageProcessor();
+        const processor = new ImageProcessor(); // contexto
 
         const files = typeof job.files === 'string' ? JSON.parse(job.files) : job.files;
         processor.addImages(files);
 
         const strategy = FileFormatFactory.createFileFormatStrategy("pdf");
-        processor.setFileFormatStrategy(strategy);
+        processor.setFileFormatStrategy(strategy); // se pasa el contexto
 
         const outputPath = await processor.process();
         console.log(outputPath)
